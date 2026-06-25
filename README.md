@@ -1,66 +1,95 @@
-# Hardhat Fund Me
+# Chainlink Crowdfunding Protocol
 
-This is a demo project that shows you how to make a crowd sourcing application that can understand pricing in USD using [Chainlink Price Feed](https://docs.chain.link/data-feeds).
+A portfolio-ready, multi-campaign crowdfunding protocol built on Ethereum with Hardhat and Chainlink ETH/USD pricing.
 
-- [Hardhat Fund Me](#hardhat-fund-me)
-- [Getting Started](#getting-started)
-  - [Requirements](#requirements)
-  - [Quickstart](#quickstart)
-- [Usage](#usage)
-  - [Testing](#testing)
-- [Deployment to a testnet or mainnet](#deployment-to-a-testnet-or-mainnet)
-- [Thank you!](#thank-you)
+## Architecture
 
-# Getting Started
+```
+CampaignFactory
+├── createCampaign() → deploys new Campaign
+├── getCampaign(index) → campaign address
+└── getCampaignCount()
 
-## Requirements
+Campaign (one per funding round)
+├── fund() — ETH contribution with USD minimum via Chainlink
+├── withdraw() — creator collects after deadline + goal met
+├── refund() — contributors reclaim after failure/cancellation
+├── cancel() — creator stops before goal reached
+└── getState() → Funding | Successful | Failed | Cancelled
+```
 
-- [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-  - You'll know you did it right if you can run `git --version` and you see a response like `git version x.x.x`
-- [Nodejs](https://nodejs.org/en/)
-  - You'll know you've installed nodejs right if you can run:
-    - `node --version` and get an ouput like: `vx.x.x`
-    - This should come with `npm` and `npx`
+## Contracts
+
+| Contract | Description |
+|---|---|
+| `CampaignFactory.sol` | Creates and tracks campaigns, emits `CampaignCreated` |
+| `Campaign.sol` | Individual campaign with funding, withdrawal, refunds, cancellation |
+| `PriceConverter.sol` | Library for Chainlink ETH/USD price with stale/zero/incomplete round safety |
 
 ## Quickstart
 
-```
-git clone https://github.com/algoexpert-io/chainlink-project-1
-cd chainlink-project-1
-npm i
+```bash
+git clone <repo-url>
+cd chainlink-project-1-master
+npm install
+npx hardhat test
 ```
 
-# Usage
+## Deployment
 
-Deploy:
-
+```bash
+npx hardhat run scripts/deployFactory.js --network sepolia
 ```
-npx hardhat run scripts/deployFundMe.js
+
+Requires `SEPOLIA_RPC_URL` and `PRIVATE_KEY` in `.env`.
+
+## Interaction Examples
+
+```javascript
+// Create a campaign
+const tx = await factory.createCampaign(
+  "ipfs://QmMetadata",
+  ethers.utils.parseEther("1000"),  // $1000 goal
+  ethers.utils.parseEther("10"),    // $10 minimum
+  deadlineTimestamp
+);
+const receipt = await tx.wait();
+const campaignAddress = receipt.events[0].args.campaign;
+const campaign = await ethers.getContractAt("Campaign", campaignAddress);
+
+// Fund
+await campaign.fund({ value: ethers.utils.parseEther("0.1") });
+
+// Creator: withdraw after deadline when goal is met
+await campaign.withdraw();
+
+// Contributor: refund on failed/cancelled campaign
+await campaign.refund();
+
+// Creator: cancel before goal is reached
+await campaign.cancel();
+
+// Read state and contributions
+await campaign.getState();
+await campaign.getContribution(contributorAddress);
+await campaign.getSummary();
 ```
 
 ## Testing
 
+```bash
+npx hardhat test            # Run all tests
+npx hardhat coverage        # (optional) Coverage report
 ```
-npx hardhat test
-```
 
+## Networks
 
-# Deployment to a testnet or mainnet
+- **Hardhat/Localhost** — dev, uses `MockPriceFeed`
+- **Sepolia** — testnet, uses Chainlink ETH/USD feed `0x694AA1769357215DE4FAC081bf1f309aDC325306`
 
-1. Setup environment variables
+## Scope
 
-You'll want to set your `GOERLI_RPC_URL` and `PRIVATE_KEY` as environment variables. You can add them to a `.env` file, similar to what you see in `.env.example`.
-
-- `PRIVATE_KEY`: The private key of your account (like from [metamask](https://metamask.io/)). **NOTE:** FOR DEVELOPMENT, PLEASE USE A KEY THAT DOESN'T HAVE ANY REAL FUNDS ASSOCIATED WITH IT.
-  - You can [learn how to export it here](https://metamask.zendesk.com/hc/en-us/articles/360015289632-How-to-Export-an-Account-Private-Key).
-- `GOERLI_RPC_URL`: This is url of the goerli testnet node you're working with. You can get setup with one for free from [Alchemy](https://alchemy.com/?a=673c802981)
-
-2. Get testnet ETH
-
-Head over to [faucets.chain.link](https://faucets.chain.link/) and get some tesnet ETH. You should see the ETH show up in your metamask.
-
-3. Deploy
-
-```
-npx hardhat run scripts/deployFundMe.js --network goerli
-```
+- ETH-only funding
+- Chainlink ETH/USD Data Feeds for pricing
+- Off-chain metadata via `metadataURI` string
+- No frontend, backend, ERC20, or upgradeable proxies
