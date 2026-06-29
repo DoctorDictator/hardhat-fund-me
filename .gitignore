@@ -9,3 +9,8 @@ typechain-types
 cache
 artifacts
 
+# Frontend
+frontend/node_modules
+frontend/.next
+frontend/out
+

@@ -3,10 +3,6 @@ const { networkConfig } = require("../helper-hardhat-config");
 const DECIMALS = "8";
 const INITIAL_PRICE = "200000000000"; // 2000
 
-async function main() {
-  await deployFundMe();
-}
-
 async function deployFundMe() {
   const chainId = network.config.chainId;
   const accounts = await ethers.getSigners();
@@ -14,10 +10,10 @@ async function deployFundMe() {
 
   let mockPriceFeedAddress;
   if (chainId == 31337) {
-    const mockPriceFeedFactory = await ethers.getContractFactory(
+    const MockV3Aggregator = await ethers.getContractFactory(
       "MockV3Aggregator"
     );
-    mockPriceFeed = await mockPriceFeedFactory
+    const mockPriceFeed = await MockV3Aggregator
       .connect(deployer)
       .deploy(DECIMALS, INITIAL_PRICE);
     await mockPriceFeed.deployed();
@@ -26,8 +22,8 @@ async function deployFundMe() {
     mockPriceFeedAddress = networkConfig[chainId]["ethUsdPriceFeed"];
   }
   console.log("Deploying, please wait...")
-  const fundMeFacotry = await ethers.getContractFactory("FundMe");
-  const fundMe = await fundMeFacotry
+  const fundMeFactory = await ethers.getContractFactory("FundMe");
+  const fundMe = await fundMeFactory
     .connect(deployer)
     .deploy(mockPriceFeedAddress);
   await fundMe.deployed();
@@ -35,12 +31,14 @@ async function deployFundMe() {
   return fundMe;
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  deployFundMe()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}
 
 module.exports = {
   deployFundMe,

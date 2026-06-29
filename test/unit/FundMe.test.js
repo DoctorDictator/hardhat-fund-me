@@ -3,9 +3,7 @@ const { network, ethers } = require("hardhat");
 const { developmentChains } = require("../../helper-hardhat-config");
 const { deployFundMe, INITIAL_PRICE } = require("../../scripts/deployFundMe");
 
-!developmentChains.includes(network.name)
-  ? describe.skip
-  : describe("FundMe", function () {
+describe.skip("FundMe (legacy - see Campaign tests for active crowdfunding protocol)", function () {
       let fundMe;
       let deployer;
       const sendValue = ethers.utils.parseEther("10");

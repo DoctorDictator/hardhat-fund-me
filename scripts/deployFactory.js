@@ -4,10 +4,6 @@ const { networkConfig } = require("../helper-hardhat-config");
 const DECIMALS = "8";
 const INITIAL_PRICE = "200000000000"; // 2000 USD
 
-async function main() {
-  await deployFactory();
-}
-
 async function deployFactory() {
   const chainId = network.config.chainId;
   const accounts = await ethers.getSigners();
@@ -36,10 +32,14 @@ async function deployFactory() {
   return factory;
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  deployFactory()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}
 
 module.exports = {
   deployFactory,

@@ -17,12 +17,14 @@ error Campaign_AlreadyRefunded();
 error Campaign_InvalidDeadline();
 error Campaign_InvalidGoal();
 error Campaign_InvalidMinContribution();
+error Campaign_InvalidPriceFeed();
+error Campaign_EmptyMetadata();
 error Campaign_Reentrant();
 
 contract Campaign {
     using PriceConverter for uint256;
 
-    enum CampaignState { Funding, Successful, Failed, Cancelled }
+    enum CampaignState { Funding, Successful, Failed, Cancelled, PaidOut }
 
     event Funded(address indexed contributor, uint256 ethAmount, uint256 usdValue);
     event Withdrawn(address indexed creator, uint256 amount);
@@ -39,6 +41,7 @@ contract Campaign {
     uint256 public totalRaisedUsd;
     uint256 public totalRaisedEth;
     uint256 public contributorCount;
+    bool public withdrawn;
 
     CampaignState private s_state;
     mapping(address => uint256) private s_contributions;
@@ -79,6 +82,8 @@ contract Campaign {
         if (_deadline <= block.timestamp) revert Campaign_InvalidDeadline();
         if (_goalUsd == 0) revert Campaign_InvalidGoal();
         if (_minContributionUsd == 0) revert Campaign_InvalidMinContribution();
+        if (_priceFeed == address(0)) revert Campaign_InvalidPriceFeed();
+        if (bytes(_metadataURI).length == 0) revert Campaign_EmptyMetadata();
 
         metadataURI = _metadataURI;
         goalUsd = _goalUsd;
@@ -120,6 +125,7 @@ contract Campaign {
         (bool success, ) = creator.call{value: balance}("");
         if (!success) revert Campaign_TransferFailed();
 
+        withdrawn = true;
         emit Withdrawn(creator, balance);
     }
 
@@ -127,6 +133,7 @@ contract Campaign {
         CampaignState currentState = getState();
         if (currentState == CampaignState.Funding) revert Campaign_CampaignEnded();
         if (currentState == CampaignState.Successful) revert Campaign_GoalAlreadyReached();
+        if (currentState == CampaignState.PaidOut) revert Campaign_GoalAlreadyReached();
         if (s_hasRefunded[msg.sender]) revert Campaign_AlreadyRefunded();
         if (s_contributions[msg.sender] == 0) revert Campaign_NotContributor();
 
@@ -148,6 +155,7 @@ contract Campaign {
     }
 
     function getState() public view returns (CampaignState) {
+        if (withdrawn) return CampaignState.PaidOut;
         if (s_state == CampaignState.Cancelled) return CampaignState.Cancelled;
         if (totalRaisedUsd >= goalUsd) return CampaignState.Successful;
         if (block.timestamp >= deadline) return CampaignState.Failed;
@@ -170,8 +178,9 @@ contract Campaign {
         uint256 _totalRaisedEth,
         uint256 _deadline,
         CampaignState _state,
-        uint256 _contributorCount
+        uint256 _contributorCount,
+        bool _withdrawn
     ) {
-        return (creator, metadataURI, goalUsd, totalRaisedUsd, totalRaisedEth, deadline, getState(), contributorCount);
+        return (creator, metadataURI, goalUsd, totalRaisedUsd, totalRaisedEth, deadline, getState(), contributorCount, withdrawn);
     }
 }

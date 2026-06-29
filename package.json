@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "export-abis": "hardhat compile && node scripts/export-abis.js",
+    "test": "hardhat test",
+    "compile": "hardhat compile"
+  },
   "dependencies": {
     "@chainlink/contracts": "^0.5.1",
     "hardhat": "^2.12.4"

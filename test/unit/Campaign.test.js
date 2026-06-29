@@ -130,6 +130,36 @@ async function deployCampaignDirect(priceFeedAddr, deadline, deployerAddr) {
             "CampaignFactory_InvalidPriceFeed"
           );
         });
+
+        it("returns campaigns with pagination via getCampaigns", async function () {
+          await createCampaign();
+          await createCampaign(7200);
+          await createCampaign(10800);
+
+          const all = await factory.getCampaigns(0, 10);
+          expect(all.length).to.equal(3);
+
+          const page1 = await factory.getCampaigns(0, 2);
+          expect(page1.length).to.equal(2);
+
+          const page2 = await factory.getCampaigns(2, 2);
+          expect(page2.length).to.equal(1);
+
+          const empty = await factory.getCampaigns(10, 5);
+          expect(empty.length).to.equal(0);
+        });
+
+        it("tracks creator campaigns via getCreatorCampaignCount and getCreatorCampaign", async function () {
+          const addr1 = (await createCampaign()).campaign.address;
+          const addr2 = (await createCampaign(7200)).campaign.address;
+
+          expect(await factory.getCreatorCampaignCount(deployer.address)).to.equal(2);
+          expect(await factory.getCreatorCampaign(deployer.address, 0)).to.equal(addr1);
+          expect(await factory.getCreatorCampaign(deployer.address, 1)).to.equal(addr2);
+
+          const otherCount = await factory.getCreatorCampaignCount(other.address);
+          expect(otherCount).to.equal(0);
+        });
       });
 
       describe("Constructor Validation", function () {
@@ -179,6 +209,22 @@ async function deployCampaignDirect(priceFeedAddr, deadline, deployerAddr) {
             Campaign,
             "Campaign_InvalidMinContribution"
           );
+        });
+
+        it("reverts if metadata URI is empty", async function () {
+          const deadline = await getFutureTimestamp();
+          const Campaign = await ethers.getContractFactory("Campaign");
+          await expect(
+            Campaign.deploy("", GOAL_USD, MIN_CONTRIBUTION_USD, deadline, priceFeed.address, deployer.address)
+          ).to.be.revertedWithCustomError(Campaign, "Campaign_EmptyMetadata");
+        });
+
+        it("reverts if price feed is zero address", async function () {
+          const deadline = await getFutureTimestamp();
+          const Campaign = await ethers.getContractFactory("Campaign");
+          await expect(
+            Campaign.deploy(METADATA_URI, GOAL_USD, MIN_CONTRIBUTION_USD, deadline, ethers.constants.AddressZero, deployer.address)
+          ).to.be.revertedWithCustomError(Campaign, "Campaign_InvalidPriceFeed");
         });
       });
 
@@ -532,6 +578,35 @@ async function deployCampaignDirect(priceFeedAddr, deadline, deployerAddr) {
           await createCampaign();
           await campaign.connect(deployer).cancel();
           expect(await campaign.getState()).to.equal(3);
+        });
+
+        it("returns PaidOut after successful withdrawal", async function () {
+          await createCampaign(3600);
+          const largeValue = ethers.utils.parseEther("0.5");
+          await campaign.connect(funder1).fund({ value: largeValue });
+
+          await network.provider.send("evm_increaseTime", [3601]);
+          await network.provider.send("evm_mine");
+
+          await campaign.connect(deployer).withdraw();
+          expect(await campaign.getState()).to.equal(4);
+        });
+      });
+
+      describe("PaidOut state", function () {
+        it("reverts refund after creator has withdrawn", async function () {
+          await createCampaign(3600);
+          const largeValue = ethers.utils.parseEther("0.5");
+          await campaign.connect(funder1).fund({ value: largeValue });
+
+          await network.provider.send("evm_increaseTime", [3601]);
+          await network.provider.send("evm_mine");
+
+          await campaign.connect(deployer).withdraw();
+
+          await expect(
+            campaign.connect(funder1).refund()
+          ).to.be.revertedWithCustomError(campaign, "Campaign_GoalAlreadyReached");
         });
       });
 
